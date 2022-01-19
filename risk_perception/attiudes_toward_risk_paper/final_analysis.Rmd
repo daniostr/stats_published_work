@@ -1,0 +1,317 @@
+---
+title: "Attitudes toward risk among emergency physicians and advanced practice clinicians in Massachusetts - Analysis"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, include=FALSE}
+library(data.table)
+library(gtools)
+library(haven)
+library(psych)
+library(MASS)
+library(lubridate)
+library(dplyr)
+library(Hmisc)
+library(ggplot2)
+library(GGally)
+library(psycho)
+library(correlation)
+library(corrplot)
+library(corrgram)
+library(ggpubr)
+library(rstatix)
+library(psy) ## cronbach()
+library(tidyr) ## pivot_longer()
+library(pubh)
+library(jtools)
+library(tableone)
+```
+
+```{r load data, warning=TRUE, include=FALSE}
+df <- fread("~/daniel/clinical_research/risk_perception/First_Paper/input/Survey data for Victor 9.25.20.csv")
+df1 <- df[, .SD, .SDcols = rts1:fms6]
+```
+
+```{r diagnostics, eval=FALSE, warning=FALSE, include=FALSE}
+df <- df[complete.cases(df1), ]
+df <-
+  df[!rowSums(is.na(df1)) == 42, ]  # Remove cases that did not answer any item
+df1 <- df1[!rowSums(is.na(df1)) == 42, ]
+table(rowSums(is.na(df1[, rts1:rts6])))
+table(rowSums(is.na(df1[, ncc1:ncc13])))
+table(rowSums(is.na(df1[, sus1:sus13])))
+table(rowSums(is.na(df1[, fms1:fms6])))
+
+df1 <- df1[!rowSums(is.na(df1)) == 42 &
+             !rowSums(is.na(df1[, rts1:rts6])) > 1 &
+             !rowSums(is.na(df1[, ncc1:ncc13])) > 1 &
+             !rowSums(is.na(df1[, sus1:sus13])) > 1 &
+             !rowSums(is.na(df1[, fms1:fms6])) > 1, ]
+missing_items_per <-
+  c(
+    colSums(is.na(df1[, rts1:rts6])) / 1116 * 100,
+    colSums(is.na(df1[, ncc1:ncc13])) / 1116 * 100,
+    colSums(is.na(df1[, sus1:sus13])) / 1116 * 100,
+    colSums(is.na(df1[, fms1:fms6])) / 1116 * 100
+  )
+missing_items_no <-
+  c(colSums(is.na(df1[, rts1:rts6])),
+    colSums(is.na(df1[, ncc1:ncc13])),
+    colSums(is.na(df1[, sus1:sus13])),
+    colSums(is.na(df1[, fms1:fms6])))
+```
+
+```{r handle missing data, include=FALSE}
+# Remove all missing data from data frame
+df <- df[!rowSums(is.na(df1)) == 42 &
+           !rowSums(is.na(df1[, rts1:rts6])) > 1 &
+           !rowSums(is.na(df1[, ncc1:ncc13])) > 1 &
+           !rowSums(is.na(df1[, sus1:sus13])) > 1 &
+           !rowSums(is.na(df1[, fms1:fms6])) > 1, ]
+# Mean imputation for the rest
+col_names <- colnames(df[, rts1:fms6])
+recode_na <- function(x) {
+  ifelse(is.na(x), mean(x, na.rm = TRUE), x)
+}
+df[, (col_names) :=
+     lapply(.SD, recode_na), .SDcols = col_names]
+# Reverse Questions
+df[, `:=`(rts2 = (7 - rts2),
+          rts4 = (7 - rts4),
+          rts6 = (7 - rts6))] 
+df[, `:=`(sus3 = 7 - sus3, sus13 = 7 - sus13)]
+# Sum of the scales
+df$rts_total <- rowSums(df[, rts1:rts6])
+df$ncc_total = rowSums(df[, ncc1:ncc15])
+df$sus_total = rowSums(df[, sus1:sus13])
+df$fms_total = rowSums(df[, fms1:fms6])
+```
+
+```{r data manipulation, include=FALSE}
+# Grouping provider type -------------------
+df[, `:=`(provider_type_grpd = NA)]
+df[, `:=`(provider_type_grpd = as.factor(provider_type_grpd))]
+df[df$provider_type %in% c(1, 2) |
+     title == "Dr.", `:=`(provider_type_grpd = "MD/DO")]
+df[df$provider_type %in% c(3, 4) |
+     title != "Dr.", `:=`(provider_type_grpd = "NP/PA")]
+df[, `:=`(provider_type_grpd = relevel(provider_type_grpd, ref = "NP/PA"))]
+
+# Recode race -------------------
+df[, `:=`(race_grp = NA)]
+df[, `:=`(race_grp = as.factor(race_grp))]
+df[race___1 == 1, `:=`(race_grp = "white")]
+df[race___2 == 1, `:=`(race_grp = "black")]
+df[race___3 == 1, `:=`(race_grp = "asian")]
+df[is.na(race_grp), `:=`(race_grp = "other")]
+# Recode sex
+df[sex == 2, `:=`(sex = 0)]
+df[sex == 3, `:=`(sex = NA)]
+df[, `:=`(sex = factor(
+  sex,
+  levels = c(0, 1),
+  labels = c("Female", "Male")
+))]
+# Age in quartiles ---------------
+df[, `:=`(age_quartiles = quantcut(age, 4))]
+df[, `:=`(practice = as.numeric(practice))]
+df[, `:=`(night = as.numeric(night))]
+df[, `:=`(shifts = as.integer(shifts))]
+df[, `:=`(payment = factor(
+  payment,
+  levels = c(1, 2, 3, 4) ,
+  labels = c("salary", "salary plus bonus", "productivity", 'other')
+))]
+
+# Recode ethnicity ----------------
+recode_ethnicity <- function(x) {
+  if (is.na(x))
+    NA
+  else if (x == 1)
+    "Hispanic_Latino_Spanish"
+  else if (x == 2)
+    "Other"
+  
+}
+recode_ethnicity <- Vectorize(recode_ethnicity)
+df[, `:=`(ethnicity = as.factor(recode_ethnicity(ethnicity)))]
+df[, `:=`(ethnicity = relevel(ethnicity, ref = "Other"))]
+
+```
+
+```{r visualization, eval=FALSE, include=FALSE}
+ggplot(df, aes(age)) + geom_histogram()
+ggplot(df, aes(practice)) + geom_histogram()
+ggplot(df, aes(shifts)) + geom_histogram()
+ggplot(df, aes(night)) + geom_histogram()
+
+quantile(df$shifts, p = c(0.25, 0.5, 0.75), na.rm = TRUE)
+quantile(df$night, p = c(0.25, 0.5, 0.75), na.rm = TRUE)
+wilcox.test(night ~ provider_type_grpd, data=df)
+wilcox.test(shifts ~ provider_type_grpd, data=df)
+```
+
+Cronbach's alpha
+```{r cronbach, echo=FALSE}
+cronbach(df[,rts1:rts6])
+cronbach(df[,sus1:sus13])
+cronbach(df[,ncc1:ncc15])
+cronbach(df[,fms1:fms6])
+```
+
+Table 1.
+```{r Table 1, echo=FALSE, warning=FALSE}
+tableone <-
+  tableone::CreateTableOne(
+    vars = c(
+      'age',
+      'sex',
+      'race_grp',
+      'practice',
+      'shifts',
+      'night',
+      'payment'
+    ),
+    strata = "provider_type_grpd",
+    data = df,
+    addOverall = TRUE
+  )
+tableoneP <- print(tableone, nonnormal = c('shifts', 'night'), test = FALSE)
+```
+
+Figure 1.
+```{r Figure 1. histogram scales, echo=FALSE, warning=FALSE}
+his1 <-
+  ggplot(df, aes(rts_total)) + geom_histogram(bins = 40, color = "black", fill =
+                                                NA) + xlab("RTS Score") + xlim(0, 80) + ylim(0, 175) + theme(text = element_text(size = 20)) + ylab("Number of Respondents") + theme_classic()
+his2 <-
+  ggplot(df, aes(sus_total)) + geom_histogram(bins = 40, color = "black", fill =
+                                                NA) + xlab("SUS Score") + xlim(0, 80) + ylim(0, 175) + theme(text = element_text(size = 20)) + ylab("Number of Respondents") + theme_classic()
+his3 <-
+  ggplot(df, aes(ncc_total)) + geom_histogram(bins = 40, color = "black", fill =
+                                                NA) + xlab("NCC Score") + xlim(0, 80) + ylim(0, 175) + theme(text = element_text(size = 20)) + ylab("Number of Respondents") + theme_classic()
+his4 <-
+  ggplot(df, aes(fms_total)) + geom_histogram(bins = 40, color = "black", fill =
+                                                NA) + xlab("FMS Score") + xlim(0, 80) + ylim(0, 175) + theme(text = element_text(size = 20)) + ylab("Number of Respondents") + theme_classic()
+ggarrange(his1, his2, his3, his4, label.y = "Number of Respondents")
+```
+
+
+Table 2. 
+```{r Table 2. Mean score scales by clinician characterstics, echo=FALSE, warning=FALSE}
+cross_tab(
+  provider_type_grpd ~ rts_total + sus_total + ncc_total +
+    fms_total,
+  data = df,
+  show.total = FALSE,
+  p_val = TRUE,
+  catMethod = 0
+) %>% theme_pubh()
+cross_tab(
+  sex ~ rts_total + sus_total + ncc_total +
+    fms_total,
+  data = df,
+  show.total = FALSE,
+  p_val = TRUE,
+  catMethod = 0
+) %>% theme_pubh()
+cross_tab(
+  age_quartiles ~ rts_total + sus_total + ncc_total +
+    fms_total,
+  data = df,
+  show.total = FALSE,
+  p_val = TRUE,
+  catMethod = 0
+) %>% theme_pubh()
+cross_tab(
+  race_grp ~ rts_total + sus_total + ncc_total +
+    fms_total,
+  data = df,
+  show.total = FALSE,
+  p_val = TRUE,
+  catMethod = 0
+) %>% theme_pubh()
+
+rts.age.quartiles <- aov(rts_total ~ age_quartiles, data = df)
+sus.age.quartiles <- aov(sus_total ~ age_quartiles, data = df)
+ncc.age.quartiles <- aov(ncc_total ~ age_quartiles, data = df)
+fms.age.quartiles <- aov(fms_total ~ age_quartiles, data = df)
+TukeyHSD(rts.age.quartiles)
+TukeyHSD(sus.age.quartiles)
+TukeyHSD(ncc.age.quartiles)
+TukeyHSD(fms.age.quartiles)
+```
+
+Table 3.
+```{r Table 3. Final models, echo=FALSE, warning=FALSE}
+model_rts_all <-
+  lm(
+    rts_total ~ provider_type_grpd + sex + age_quartiles + race_grp + shifts + night + payment,
+    data = df
+  )
+model_ncc_all <-
+  lm(
+    ncc_total ~ provider_type_grpd + sex + age_quartiles + race_grp + shifts + night + payment,
+    data = df
+  )
+model_sus_all <-
+  lm(
+    sus_total ~ provider_type_grpd + sex + age_quartiles + race_grp + shifts + night + payment,
+    data = df
+  )
+model_fms_all <-
+  lm(
+    fms_total ~ provider_type_grpd + sex + age_quartiles + race_grp + shifts + night + payment,
+    data = df
+  )
+
+export_summs(
+    model_rts_all,
+    model_ncc_all,
+    model_sus_all,
+    model_fms_all,
+    error_format = "({conf.low}, {conf.high})"
+  )
+
+```
+
+```{r Correlation matrix, echo=FALSE, warning=FALSE}
+cor_table <-
+  rcorr(as.matrix(df[, .(rts_total, ncc_total, sus_total, fms_total)]), type = "pearson")
+M <- cor_table$r
+p_mat <- cor_table$P
+
+
+col <-
+  colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(
+  M,
+  method = "color",
+  col = col(200),
+  type = "upper",
+  order = "hclust",
+  number.cex = 1,
+  addCoef.col = "black",
+  # Add coefficient of correlation
+  tl.col = "black",
+  tl.srt = 45,
+  # Text label color and rotation
+  # Combine with significance
+  p.mat = p_mat,
+  sig.level = 0.05,
+  insig = "pch",
+  # hide correlation coefficient on the principal diagonal
+  diag = FALSE
+)
+```
+
+# Appendix 1 - Session information
+```{r sessionInfo, echo=FALSE, warning=FALSE}
+sessionInfo()
+```
