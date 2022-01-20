@@ -1,4 +1,4 @@
-# Published Work - Fianl Analysis
+# Published Work - Final Analysis
 
 Hi everyone!
 
