@@ -6,6 +6,6 @@ I share this repository that we can promote **transparent reproducible scientifi
 
 Some of my first projects are not very elegant (code looks like shit), but they still could be helpful. 
 
-If you find mistakes, or find my work helpful please let me know :).
+If you find mistakes or find my work helpful, please let me know.
 
 My email is - daniostr@gmail.com 
