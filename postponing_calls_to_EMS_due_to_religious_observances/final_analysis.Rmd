@@ -1,0 +1,897 @@
+---
+title: "Postponing calls to EMS due to religious observances - A nationwide study"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+This is was one of my first projects! 
+There is much to improve in terms of code efficiency!! 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Load libraries}
+library(data.table)
+library(ggplot2)
+library(skimr)
+library(lubridate)
+library(magrittr)
+library(stringr)
+library(knitr)
+library(effects)
+library(xlsx)
+library(tidyverse)
+library(csv)
+library(jtools)
+```
+
+```{r Load data}
+df <- read_csv("input/rawdata_mada_w.csv")
+df <- as.data.table(df)
+```
+
+```{r Data maipulation}
+first_h <- function(x) { 
+  strsplit(x, ":")[[1]][1]
+}
+
+df[, `:=`(
+  date = dmy(date),
+  age = as.numeric(age),
+  sex = factor(sex),
+  time = as.numeric(sapply(as.character(time), first_h))
+)]
+
+df[, `:=`(week_day = weekdays(date))]
+shabbat <-
+  df$week_day == "Friday" &
+  df$time > 18 | df$week_day == "Saturday" & df$time < 19
+
+kippur <-
+  df$date == "2019-10-08" &
+  df$time > 18 |
+  df$date == "2019-10-09" &
+  df$time < 19 |
+  df$date == "2020-09-27" &
+  df$time > 18 | df$date == "2020-09-28" & df$time < 19
+
+holiday <-
+  df$date == "2019-09-29" &
+  df$time > 18 |
+  df$date == "2019-09-30" &
+  df$time < 19 |
+  df$date == "2019-10-13" &
+  df$time > 18 |
+  df$date == "2019-10-14" &
+  df$time < 19 |
+  df$date == "2019-10-20" &
+  df$time > 18 |
+  df$date == "2020-10-21" &
+  df$time < 19 |
+  df$date == "2020-09-18" &
+  df$time > 18 |
+  df$date == "2020-09-19" &
+  df$time < 19 |
+  df$date == "2020-10-02" &
+  df$time > 18 |
+  df$date == "2020-10-03" &
+  df$time < 19 |
+  df$date == "2020-10-09" &
+  df$time > 18 | df$date == "2020-10-10" & df$time < 19
+
+orthodox = str_detect(df$city, "ירושלים") |
+  str_detect(df$city, "בני ברק") |
+  str_detect(df$city, "אלעד") |
+  str_detect(df$city, "ביתר עילית") |
+  str_detect(df$city, "מודיעין עילית") |
+  str_detect(df$city, "בית שמש")
+
+
+df$driving_allowed = NA
+df$driving_allowed[holiday] = 0
+df$driving_allowed[shabbat] = 0
+df$driving_allowed[is.na(df$driving_allowed)] = 1
+
+df$kippur = NA
+df$kippur[kippur] = 1
+df$kippur[is.na(df$kippur)] = 0
+
+df$orthodox <- NA
+df$orthodox[orthodox] <- 1
+df$orthodox[is.na(df$orthodox)] <- 0
+
+df[, `:=`(
+  driving_allowed = factor(driving_allowed),
+  kippur = factor(kippur),
+  orthodox = factor(orthodox)
+)]
+
+```
+
+
+```{r}
+year_2019 <- seq(ymd('2019-09-01'), ymd('2019-10-31'), by = 'day')
+year_2020 <- seq(ymd('2020-09-01'), ymd('2020-10-31'), by = 'day')
+year_tot <- c(year_2019, year_2020)
+year_tot_1 <- rep(year_tot, 24)
+time_tot <- rep(0, 122)
+for (i in 1:23) {
+  time_tot <- c(time_tot, rep(i, 122))
+}
+work_df <- data.table(year_tot_1, time_tot)
+setnames(work_df, c("year_tot_1", "time_tot"), c("date", "time"))
+setkey(work_df, date, time)
+
+work_df[, `:=`(week_day = weekdays(date))]
+shabbat.1 <-
+  work_df$week_day == "Friday" &
+  work_df$time > 18 |
+  work_df$week_day == "Saturday" & work_df$time < 19
+
+kippur.1 <-
+  work_df$date == "2019-10-08" &
+  work_df$time > 18 |
+  work_df$date == "2019-10-09" &
+  work_df$time < 19 |
+  work_df$date == "2020-09-27" &
+  work_df$time > 18 |
+  work_df$date == "2020-09-28" & work_df$time < 19
+
+holiday.1 <-
+  work_df$date == "2019-09-29" &
+  work_df$time > 18 |
+  work_df$date == "2019-09-30" &
+  work_df$time < 19 |
+  work_df$date == "2019-10-13" &
+  work_df$time > 18 |
+  work_df$date == "2019-10-14" &
+  work_df$time < 19 |
+  work_df$date == "2019-10-20" &
+  work_df$time > 18 |
+  work_df$date == "2020-10-21" &
+  work_df$time < 19 |
+  work_df$date == "2020-09-18" &
+  work_df$time > 18 |
+  work_df$date == "2020-09-19" &
+  work_df$time < 19 |
+  work_df$date == "2020-10-02" &
+  work_df$time > 18 |
+  work_df$date == "2020-10-03" &
+  work_df$time < 19 |
+  work_df$date == "2020-10-09" &
+  work_df$time > 18 |
+  work_df$date == "2020-10-10" & work_df$time < 19
+
+
+work_df$driving_allowed = NA
+work_df$driving_allowed[holiday.1] = 0
+work_df$driving_allowed[shabbat.1] = 0
+work_df$driving_allowed[kippur.1] = 0
+work_df$driving_allowed[is.na(work_df$driving_allowed)] = 1
+
+work_df$kippur = NA
+work_df$kippur[kippur.1] = 1
+work_df$kippur[is.na(work_df$kippur)] = 0
+```
+
+
+
+```{r}
+cardiac_ar = str_detect(df$code_refui_field, "דום לב")
+df_cardiac_orthodox <- df[cardiac_ar & orthodox == 1]
+df_cardiac_orthodox <-
+  df_cardiac_orthodox[, .N, by = c("time", "date")]
+setkey(df_cardiac_orthodox, date, time)
+df_cardiac_orthodox <- df_cardiac_orthodox[work_df]
+df_cardiac_orthodox[, `:=`(orthodox = 1)]
+
+df_cardiac_non_orthodox <- df[cardiac_ar & orthodox == 0]
+df_cardiac_non_orthodox <-
+  df_cardiac_non_orthodox[, .N, by = c("time", "date")]
+setkey(df_cardiac_non_orthodox, date, time)
+df_cardiac_non_orthodox <- df_cardiac_non_orthodox[work_df]
+df_cardiac_non_orthodox[, `:=`(orthodox = 0)]
+
+df_cardiac_all <-
+  rbind(df_cardiac_orthodox, df_cardiac_non_orthodox)
+df_cardiac_all[, `:=`(week_day = weekdays(date))]
+shabbat.1 <-
+  df_cardiac_all$week_day == "Friday" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$week_day == "Saturday" & df_cardiac_all$time < 19
+
+kippur.1 <-
+  df_cardiac_all$date == "2019-10-08" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2019-10-09" &
+  df_cardiac_all$time < 19 |
+  df_cardiac_all$date == "2020-09-27" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-09-28" & df_cardiac_all$time < 19
+
+after_kippur <-
+  df_cardiac_all$date == "2019-10-09" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-09-28" & df_cardiac_all$time > 18
+
+holiday.1 <-
+  df_cardiac_all$date == "2019-09-29" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2019-09-30" &
+  df_cardiac_all$time < 19 |
+  df_cardiac_all$date == "2019-10-13" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2019-10-14" &
+  df_cardiac_all$time < 19 |
+  df_cardiac_all$date == "2019-10-20" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-10-21" &
+  df_cardiac_all$time < 19 |
+  df_cardiac_all$date == "2020-09-18" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-09-19" &
+  df_cardiac_all$time < 19 |
+  df_cardiac_all$date == "2020-10-02" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-10-03" &
+  df_cardiac_all$time < 19 |
+  df_cardiac_all$date == "2020-10-09" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-10-10" & df_cardiac_all$time < 19
+
+after_holiday.1 <-
+  df_cardiac_all$date == "2019-09-30" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2019-10-14" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-10-21" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-09-19" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$date == "2020-10-10" &
+  df_cardiac_all$time > 18 |
+  df_cardiac_all$week_day == "Saturday" & df_cardiac_all$time > 18
+
+df_cardiac_all$exposure = NA
+df_cardiac_all$exposure[holiday.1] = "holiday/shabat"
+df_cardiac_all$exposure[shabbat.1] = "holiday/shabat"
+df_cardiac_all$exposure[kippur.1] = "Kippur"
+df_cardiac_all$exposure[after_kippur] = "After Kippur"
+df_cardiac_all$exposure[after_holiday.1] = "After holiday/shabat"
+df_cardiac_all$exposure[is.na(df_cardiac_all$exposure)] = "Driving allowed"
+
+df_cardiac_all[, `:=`(exposure = factor(
+  exposure,
+  levels = c(
+    "Driving allowed",
+    "holiday/shabat",
+    "After holiday/shabat",
+    "Kippur",
+    "After Kippur"
+  )
+))]
+df_cardiac_all[, `:=`(N = as.numeric(N))]
+df_cardiac_all[is.na(N), `:=`(N = 0)]
+df_cardiac_all[, `:=`(orthodox = factor(orthodox))]
+df_cardiac_non_orthodox <- df_cardiac_all[orthodox == 0]
+df_cardiac_orthodox <- df_cardiac_all[orthodox == 1]
+
+model7 = glm(N ~ exposure, data = df_cardiac_orthodox, family = quasipoisson)
+model8 = glm(N ~ exposure, data = df_cardiac_non_orthodox , family = quasipoisson)
+
+m7 <- summ(model7, confint = TRUE)
+m7 <- m7$coeftable
+m8 <- summ(model8, confint = TRUE)
+m8 <- m8$coeftable
+m <- rbind(m7, m8)
+
+colnames(m)[1] <- "Estimate"
+colnames(m)[2] <- "low"
+colnames(m)[3] <- "high"
+
+plot_table <- data.table(variable = rownames(m), m)
+plot_table <- plot_table[-c(1, 6)]
+plot_table[, `:=`(
+  low = exp(as.numeric(low)),
+  high = exp(as.numeric(high)),
+  Estimate = exp(as.numeric(Estimate))
+)]
+plot_table$Settlement <-  c(rep(0 , 4), rep(1, 4))
+plot_table$variable <-
+  c(
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur",
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur"
+  )
+plot_table[, `:=`(Settlement = factor(Settlement, labels = c("Orthodox", "Non-Orthodox")),
+                  condition = "Cardiac arrest")]
+plot_table_total <- plot_table
+
+summ_model1 <- summary(model7)
+confit_model1 <- confint(model7)
+table1 <- as.data.table(confit_model1)
+table1[, `:=`(PR = summ_model1$coefficients[, 1],
+              P.value = summ_model1$coefficients[, 4])]
+table1[, `:=`(
+  PR = exp(PR),
+  `2.5 %` = exp(`2.5 %`),
+  `97.5 %` = exp(`97.5 %`)
+)]
+table1 = round(table1, 3)
+table1[, `:=`(
+  variable = c(
+    "intercept",
+    "Driving not allowed (1)",
+    "Kippur (1)",
+    "After Kippur (1)",
+    "Holiday/ Shabbat (1)"
+  )
+)]
+cardiac_orthodox_table = table1[c(1, 2, 5, 3, 4), c(5, 3, 1, 2, 4)]
+
+summ_model4 <- summary(model8)
+confit_model4 <- confint(model8)
+table2 <- as.data.table(confit_model4)
+table2[, `:=`(PR = summ_model4$coefficients[, 1],
+              P.value = summ_model4$coefficients[, 4])]
+table2[, `:=`(
+  PR = exp(PR),
+  `2.5 %` = exp(`2.5 %`),
+  `97.5 %` = exp(`97.5 %`)
+)]
+table2 = round(table2, 3)
+table2[, `:=`(
+  variable = c(
+    "intercept",
+    "Driving not allowed (1)",
+    "Kippur (1)",
+    "After Kippur (1)",
+    "Holiday/ Shabbat (1)"
+  )
+)]
+cardiac_non_orthodox_table = table2[c(1, 2, 5, 3, 4), c(5, 3, 1, 2, 4)]
+```
+
+```{r}
+df_cardiac_all[,`:=`(year_covid = as.factor(lubridate::year(date)))]
+model10 = glm(N ~ exposure*orthodox, data = df_cardiac_all , family = quasipoisson)
+model11 = glm(N ~ exposure*orthodox*year_covid, data = df_cardiac_all , family = quasipoisson)
+```
+
+
+```{r}
+df_cva = str_detect(df$code_refui_field, "שבץ מוחי חולף")
+df_cva_orthodox <- df[df_cva & orthodox == 1]
+df_cva_orthodox <- df_cva_orthodox[, .N, by = c("time", "date")]
+setkey(df_cva_orthodox, date, time)
+df_cva_orthodox <- df_cva_orthodox[work_df]
+df_cva_orthodox[, `:=`(orthodox = 1)]
+
+df_cva_non_orthodox <- df[df_cva & orthodox == 0]
+df_cva_non_orthodox <-
+  df_cva_non_orthodox[, .N, by = c("time", "date")]
+setkey(df_cva_non_orthodox, date, time)
+df_cva_non_orthodox <- df_cva_non_orthodox[work_df]
+df_cva_non_orthodox[, `:=`(orthodox = 0)]
+
+df_cva_all <- rbind(df_cva_orthodox, df_cva_non_orthodox)
+df_cva_all[, `:=`(week_day = weekdays(date))]
+shabbat.1 <-
+  df_cva_all$week_day == "Friday" &
+  df_cva_all$time > 18 |
+  df_cva_all$week_day == "Saturday" & df_cva_all$time < 19
+
+kippur.1 <-
+  df_cva_all$date == "2019-10-08" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2019-10-09" &
+  df_cva_all$time < 19 |
+  df_cva_all$date == "2020-09-27" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-09-28" & df_cva_all$time < 19
+
+after_kippur <-
+  df_cva_all$date == "2019-10-09" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-09-28" & df_cva_all$time > 18
+
+holiday.1 <-
+  df_cva_all$date == "2019-09-29" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2019-09-30" &
+  df_cva_all$time < 19 |
+  df_cva_all$date == "2019-10-13" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2019-10-14" &
+  df_cva_all$time < 19 |
+  df_cva_all$date == "2019-10-20" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-10-21" &
+  df_cva_all$time < 19 |
+  df_cva_all$date == "2020-09-18" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-09-19" &
+  df_cva_all$time < 19 |
+  df_cva_all$date == "2020-10-02" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-10-03" &
+  df_cva_all$time < 19 |
+  df_cva_all$date == "2020-10-09" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-10-10" & df_cva_all$time < 19
+
+after_holiday.1 <-
+  df_cva_all$date == "2019-09-30" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2019-10-14" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-10-21" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-09-19" &
+  df_cva_all$time > 18 |
+  df_cva_all$date == "2020-10-10" &
+  df_cva_all$time > 18 |
+  df_cva_all$week_day == "Saturday" & df_cva_all$time > 18
+
+df_cva_all$exposure = NA
+df_cva_all$exposure[holiday.1] = "holiday/shabat"
+df_cva_all$exposure[shabbat.1] = "holiday/shabat"
+df_cva_all$exposure[kippur.1] = "Kippur"
+df_cva_all$exposure[after_kippur] = "After Kippur"
+df_cva_all$exposure[after_holiday.1] = "After holiday/shabat"
+df_cva_all$exposure[is.na(df_cva_all$exposure)] = "Driving allowed"
+
+df_cva_all[, `:=`(exposure = factor(
+  exposure,
+  levels = c(
+    "Driving allowed",
+    "holiday/shabat",
+    "After holiday/shabat",
+    "Kippur",
+    "After Kippur"
+  )
+))]
+df_cva_all[, `:=`(N = as.numeric(N))]
+df_cva_all[is.na(N), `:=`(N = 0)]
+df_cva_all[, `:=`(orthodox = factor(orthodox))]
+df_cva_non_orthodox <- df_cva_all[orthodox == 0]
+df_cva_orthodox <- df_cva_all[orthodox == 1]
+
+model7 = glm(N ~ exposure, data = df_cva_orthodox, family = quasipoisson)
+model8 = glm(N ~ exposure, data = df_cva_non_orthodox, family = quasipoisson)
+
+m7 <- summ(model7, confint = TRUE)
+m7 <- m7$coeftable
+m8 <- summ(model8, confint = TRUE)
+m8 <- m8$coeftable
+m <- rbind(m7, m8)
+
+colnames(m)[1] <- "Estimate"
+colnames(m)[2] <- "low"
+colnames(m)[3] <- "high"
+
+plot_table <- data.table(variable = rownames(m), m)
+plot_table <- plot_table[-c(1, 6)]
+plot_table[, `:=`(
+  low = exp(as.numeric(low)),
+  high = exp(as.numeric(high)),
+  Estimate = exp(as.numeric(Estimate))
+)]
+plot_table$Settlement <-  c(rep(0 , 4), rep(1, 4))
+plot_table$variable <-
+  c(
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur",
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur"
+  )
+plot_table[, `:=`(Settlement = factor(Settlement, labels = c("Orthodox", "Non-Orthodox")),
+                  condition = "CVA")]
+plot_table_total <- rbind(plot_table_total, plot_table)
+```
+
+```{r}
+df_cva_all[,`:=`(year_covid = as.factor(lubridate::year(date)))]
+model10 = glm(N ~ exposure*orthodox, data = df_cva_all , family = quasipoisson)
+model11 = glm(N ~ exposure*orthodox*year_covid, data = df_cva_all , family = quasipoisson)
+```
+
+```{r}
+df_dyspnea = str_detect(df$code_refui_field, "קוצר נשימה")
+df_dyspnea_orthodox <- df[df_dyspnea & orthodox == 1]
+df_dyspnea_orthodox <-
+  df_dyspnea_orthodox[, .N, by = c("time", "date")]
+setkey(df_dyspnea_orthodox, date, time)
+df_dyspnea_orthodox <- df_dyspnea_orthodox[work_df]
+df_dyspnea_orthodox[, `:=`(orthodox = 1)]
+
+df_dyspnea_non_orthodox <- df[df_dyspnea & orthodox == 0]
+df_dyspnea_non_orthodox <-
+  df_dyspnea_non_orthodox[, .N, by = c("time", "date")]
+setkey(df_dyspnea_non_orthodox, date, time)
+df_dyspnea_non_orthodox <- df_dyspnea_non_orthodox[work_df]
+df_dyspnea_non_orthodox[, `:=`(orthodox = 0)]
+
+df_dyspnea_all <-
+  rbind(df_dyspnea_orthodox, df_dyspnea_non_orthodox)
+df_dyspnea_all[, `:=`(week_day = weekdays(date))]
+shabbat.1 <-
+  df_dyspnea_all$week_day == "Friday" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$week_day == "Saturday" & df_dyspnea_all$time < 19
+
+kippur.1 <-
+  df_dyspnea_all$date == "2019-10-08" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2019-10-09" &
+  df_dyspnea_all$time < 19 |
+  df_dyspnea_all$date == "2020-09-27" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-09-28" & df_dyspnea_all$time < 19
+
+after_kippur <-
+  df_dyspnea_all$date == "2019-10-09" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-09-28" & df_dyspnea_all$time > 18
+
+holiday.1 <-
+  df_dyspnea_all$date == "2019-09-29" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2019-09-30" &
+  df_dyspnea_all$time < 19 |
+  df_dyspnea_all$date == "2019-10-13" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2019-10-14" &
+  df_dyspnea_all$time < 19 |
+  df_dyspnea_all$date == "2019-10-20" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-10-21" &
+  df_dyspnea_all$time < 19 |
+  df_dyspnea_all$date == "2020-09-18" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-09-19" &
+  df_dyspnea_all$time < 19 |
+  df_dyspnea_all$date == "2020-10-02" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-10-03" &
+  df_dyspnea_all$time < 19 |
+  df_dyspnea_all$date == "2020-10-09" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-10-10" & df_dyspnea_all$time < 19
+
+after_holiday.1 <-
+  df_dyspnea_all$date == "2019-09-30" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2019-10-14" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-10-21" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-09-19" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$date == "2020-10-10" &
+  df_dyspnea_all$time > 18 |
+  df_dyspnea_all$week_day == "Saturday" & df_dyspnea_all$time > 18
+
+df_dyspnea_all$exposure = NA
+df_dyspnea_all$exposure[holiday.1] = "holiday/shabat"
+df_dyspnea_all$exposure[shabbat.1] = "holiday/shabat"
+df_dyspnea_all$exposure[kippur.1] = "Kippur"
+df_dyspnea_all$exposure[after_kippur] = "After Kippur"
+df_dyspnea_all$exposure[after_holiday.1] = "After holiday/shabat"
+df_dyspnea_all$exposure[is.na(df_dyspnea_all$exposure)] = "Driving allowed"
+
+df_dyspnea_all[, `:=`(exposure = factor(
+  exposure,
+  levels = c(
+    "Driving allowed",
+    "holiday/shabat",
+    "After holiday/shabat",
+    "Kippur",
+    "After Kippur"
+  )
+))]
+df_dyspnea_all[, `:=`(N = as.numeric(N))]
+df_dyspnea_all[is.na(N), `:=`(N = 0)]
+df_dyspnea_non_orthodox <- df_dyspnea_all[orthodox == 0]
+df_dyspnea_orthodox <- df_dyspnea_all[orthodox == 1]
+
+model7 = glm(N ~ exposure, data = df_dyspnea_orthodox, family = quasipoisson)
+model8 = glm(N ~ exposure, data = df_dyspnea_non_orthodox, family = quasipoisson)
+
+m7 <- summ(model7, confint = TRUE)
+m7 <- m7$coeftable
+m8 <- summ(model8, confint = TRUE)
+m8 <- m8$coeftable
+m <- rbind(m7, m8)
+
+colnames(m)[1] <- "Estimate"
+colnames(m)[2] <- "low"
+colnames(m)[3] <- "high"
+
+plot_table <- data.table(variable = rownames(m), m)
+plot_table <- plot_table[-c(1, 6)]
+plot_table[, `:=`(
+  low = exp(as.numeric(low)),
+  high = exp(as.numeric(high)),
+  Estimate = exp(as.numeric(Estimate))
+)]
+plot_table$Settlement <-  c(rep(0 , 4), rep(1, 4))
+plot_table$variable <-
+  c(
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur",
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur"
+  )
+plot_table[, `:=`(Settlement = factor(Settlement, labels = c("Orthodox", "Non-Orthodox")),
+                  condition = "Dyspnea")]
+plot_table_total <- rbind(plot_table_total, plot_table)
+summ_model1 <- summary(model7)
+confit_model1 <- confint(model7)
+table1 <- as.data.table(confit_model1)
+table1[, `:=`(PR = summ_model1$coefficients[, 1],
+              P.value = summ_model1$coefficients[, 4])]
+table1[, `:=`(
+  PR = exp(PR),
+  `2.5 %` = exp(`2.5 %`),
+  `97.5 %` = exp(`97.5 %`)
+)]
+table1 = round(table1, 3)
+table1[, `:=`(
+  variable = c(
+    "intercept",
+    "Driving allowed (1)",
+    "Kippur (1)",
+    "After Kippur (1)",
+    "Holiday/ Shabbat (1)"
+  )
+)]
+df_dyspnea_orthodox_table = table1[c(1, 2, 5, 3, 4), c(5, 3, 1, 2, 4)]
+
+summ_model4 <- summary(model8)
+confit_model4 <- confint(model8)
+table2 <- as.data.table(confit_model4)
+table2[, `:=`(PR = summ_model4$coefficients[, 1],
+              P.value = summ_model4$coefficients[, 4])]
+table2[, `:=`(
+  PR = exp(PR),
+  `2.5 %` = exp(`2.5 %`),
+  `97.5 %` = exp(`97.5 %`)
+)]
+table2 = round(table2, 3)
+table2[, `:=`(
+  variable = c(
+    "intercept",
+    "Driving allowed (1)",
+    "Kippur (1)",
+    "After Kippur (1)",
+    "Holiday/ Shabbat (1)"
+  )
+)]
+df_dyspnea_non_orthodox_table = table2[c(1, 2, 5, 3, 4), c(5, 3, 1, 2, 4)]
+```
+
+```{r}
+df_dyspnea_all[,`:=`(year_covid = as.factor(lubridate::year(date)))]
+model10 = glm(N ~ exposure*orthodox, data = df_dyspnea_all , family = quasipoisson)
+model11 = glm(N ~ exposure*orthodox*year_covid, data = df_dyspnea_all , family = quasipoisson)
+```
+
+
+```{r}
+df_trauma = str_detect(df$code_refui_field, "חבלה") |
+  str_detect(df$code_refui_field, "חבלת") |
+  str_detect(df$code_refui_field, "גפיים")
+df_trauma_orthodox <- df[df_trauma & orthodox == 1]
+df_trauma_orthodox <- df_trauma_orthodox[, .N, by = c("time", "date")]
+setkey(df_trauma_orthodox, date, time)
+df_trauma_orthodox <- df_trauma_orthodox[work_df]
+df_trauma_orthodox[, `:=`(orthodox = 1)]
+
+df_trauma_non_orthodox <- df[df_trauma & orthodox == 0]
+df_trauma_non_orthodox <-
+  df_trauma_non_orthodox[, .N, by = c("time", "date")]
+setkey(df_trauma_non_orthodox, date, time)
+df_trauma_non_orthodox <- df_trauma_non_orthodox[work_df]
+df_trauma_non_orthodox[, `:=`(orthodox = 0)]
+
+
+df_trauma_all <- rbind(df_trauma_orthodox, df_trauma_non_orthodox)
+df_trauma_all[, `:=`(week_day = weekdays(date))]
+shabbat.1 <-
+  df_trauma_all$week_day == "Friday" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$week_day == "Saturday" & df_trauma_all$time < 19
+
+kippur.1 <-
+  df_trauma_all$date == "2019-10-08" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2019-10-09" &
+  df_trauma_all$time < 19 |
+  df_trauma_all$date == "2020-09-27" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-09-28" & df_trauma_all$time < 19
+
+after_kippur <-
+  df_trauma_all$date == "2019-10-09" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-09-28" & df_trauma_all$time > 18
+
+holiday.1 <-
+  df_trauma_all$date == "2019-09-29" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2019-09-30" &
+  df_trauma_all$time < 19 |
+  df_trauma_all$date == "2019-10-13" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2019-10-14" &
+  df_trauma_all$time < 19 |
+  df_trauma_all$date == "2019-10-20" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-10-21" &
+  df_trauma_all$time < 19 |
+  df_trauma_all$date == "2020-09-18" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-09-19" &
+  df_trauma_all$time < 19 |
+  df_trauma_all$date == "2020-10-02" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-10-03" &
+  df_trauma_all$time < 19 |
+  df_trauma_all$date == "2020-10-09" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-10-10" & df_trauma_all$time < 19
+
+after_holiday.1 <-
+  df_trauma_all$date == "2019-09-30" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2019-10-14" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-10-21" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-09-19" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$date == "2020-10-10" &
+  df_trauma_all$time > 18 |
+  df_trauma_all$week_day == "Saturday" & df_trauma_all$time > 18
+
+df_trauma_all$exposure = NA
+df_trauma_all$exposure[holiday.1] = "holiday/shabat"
+df_trauma_all$exposure[shabbat.1] = "holiday/shabat"
+df_trauma_all$exposure[kippur.1] = "Kippur"
+df_trauma_all$exposure[after_kippur] = "After Kippur"
+df_trauma_all$exposure[after_holiday.1] = "After holiday/shabat"
+df_trauma_all$exposure[is.na(df_trauma_all$exposure)] = "Driving allowed"
+
+df_trauma_all[, `:=`(exposure = factor(
+  exposure,
+  levels = c(
+    "Driving allowed",
+    "holiday/shabat",
+    "After holiday/shabat",
+    "Kippur",
+    "After Kippur"
+  )
+))]
+df_trauma_all[, `:=`(N = as.numeric(N))]
+df_trauma_all[is.na(N), `:=`(N = 0)]
+df_trauma_all[, `:=`(orthodox = factor(orthodox))]
+df_trauma_non_orthodox <- df_trauma_all[orthodox == 0]
+df_trauma_orthodox <- df_trauma_all[orthodox == 1]
+
+model7 = glm(N ~ exposure, data = df_trauma_orthodox, family = quasipoisson)
+model8 = glm(N ~ exposure, data = df_trauma_non_orthodox, family = quasipoisson)
+
+m7 <- summ(model7, confint = TRUE)
+m7 <- m7$coeftable
+m8 <- summ(model8, confint = TRUE)
+m8 <- m8$coeftable
+m <- rbind(m7, m8)
+
+colnames(m)[1] <- "Estimate"
+colnames(m)[2] <- "low"
+colnames(m)[3] <- "high"
+
+plot_table <- data.table(variable = rownames(m), m)
+plot_table <- plot_table[-c(1, 6)]
+plot_table[, `:=`(
+  low = exp(as.numeric(low)),
+  high = exp(as.numeric(high)),
+  Estimate = exp(as.numeric(Estimate))
+)]
+plot_table$Settlement <-  c(rep(0 , 4), rep(1, 4))
+plot_table$variable <-
+  c(
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur",
+    "Holiday/Shabat",
+    "After holiday/Shabat",
+    "Kippur",
+    "After Kippur"
+  )
+plot_table[, `:=`(Settlement = factor(Settlement, labels = c("Orthodox", "Non-Orthodox")),
+                  condition = "Trauma")]
+plot_table_total <- rbind(plot_table_total, plot_table)
+summ_model1 <- summary(model7)
+confit_model1 <- confint(model7)
+table1 <- as.data.table(confit_model1)
+table1[, `:=`(PR = summ_model1$coefficients[, 1],
+              P.value = summ_model1$coefficients[, 4])]
+table1[, `:=`(
+  PR = exp(PR),
+  `2.5 %` = exp(`2.5 %`),
+  `97.5 %` = exp(`97.5 %`)
+)]
+table1 = round(table1, 3)
+table1[, `:=`(
+  variable = c(
+    "intercept",
+    "Driving allowed (1)",
+    "Kippur (1)",
+    "After Kippur (1)",
+    "Holiday/ Shabbat (1)"
+  )
+)]
+df_trauma_orthodox_table = table1[c(1, 2, 5, 3, 4), c(5, 3, 1, 2, 4)]
+
+summ_model4 <- summary(model8)
+confit_model4 <- confint(model8)
+table2 <- as.data.table(confit_model4)
+table2[, `:=`(PR = summ_model4$coefficients[, 1],
+              P.value = summ_model4$coefficients[, 4])]
+table2[, `:=`(
+  PR = exp(PR),
+  `2.5 %` = exp(`2.5 %`),
+  `97.5 %` = exp(`97.5 %`)
+)]
+table2 = round(table2, 3)
+table2[, `:=`(
+  variable = c(
+    "intercept",
+    "Driving allowed (1)",
+    "Kippur (1)",
+    "After Kippur (1)",
+    "Holiday/ Shabbat (1)"
+  )
+)]
+df_trauma_non_orthodox_table = table2[c(1, 2, 5, 3, 4), c(5, 3, 1, 2, 4)]
+```
+
+
+```{r}
+df_trauma_all[,`:=`(year_covid = as.factor(lubridate::year(date)))]
+model10 = glm(N ~ exposure*orthodox, data = df_trauma_all , family = quasipoisson)
+model11 = glm(N ~ exposure*orthodox*year_covid, data = df_trauma_all , family = quasipoisson)
+```
+
+```{r}
+pd <- position_dodge(0.9)
+pd_text <- position_dodge(0.01)
+
+plot_table_total[, `:=`(Community = Settlement)]
+ggplot(plot_table_total, aes(x=variable, y=Estimate, colour=Community)) + 
+    geom_errorbar(aes(ymin=low, ymax=high), width=0.4, position=pd, size = 1.2) +
+    geom_point(position=pd, size = 2) +
+  geom_text(
+    aes(label=round(Estimate, 2)),
+    check_overlap = T, size = 3.1, fontface = "bold"
+  )  + theme_bw(base_size = 14) + ylab("Prevalence Ratio (Log Scale)") +xlab("") + theme(title = element_text(size = 18, face = "bold"), axis.text.x = element_text(size = 14, angle = 90, vjust = 0.3, face = "bold"), legend.text = element_text(size = 16)) + 
+    facet_wrap(~condition,strip.position="top",nrow=1,scales = "free_x") + scale_y_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7), limits = c(0, 7)) + theme(legend.position = "top",strip.text.x = element_text(size = 16, face = "bold")) + scale_y_log10(breaks = c(0.2, 0.5, 1, 2, 5), labels = c("0.5", "0.2", "(Regular days) 1", "2", "5")) + scale_color_discrete(labels = c("Predominantly orthodox", "Predominantly non-orthodox"), l=50, c=80) +   geom_hline(yintercept=1, linetype = "dashed", size = 1, alpha = 0.5) 
+```
+
